@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FeedFlow — News Cache Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --panel: #111318;
+    --border: #1e2330;
+    --accent: #00d4ff;
+    --green: #00ff88;
+    --red: #ff4466;
+    --gold: #ffd060;
+    --purple: #a855f7;
+    --text: #c8d0e0;
+    --dim: #4a5568;
+    --hit-bg: rgba(0,255,136,0.08);
+    --miss-bg: rgba(255,68,102,0.08);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    color: var(--dim);
+    font-size: 0.85rem;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 28px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .panel-title {
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--dim);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-title span {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+  }
+
+  /* Stat cards */
+  .stat-val {
+    font-size: 2.8rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .ctrl-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+  }
+
+  .ctrl-group label {
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  .val-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    min-width: 24px;
+  }
+
+  .btn {
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    color: #000;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 22px;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+  }
+
+  .btn:hover { opacity: .85; }
+  .btn:active { transform: scale(0.97); }
+
+  /* Reference string */
+  .ref-string {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 90px;
+    overflow-y: auto;
+  }
+
+  .ref-token {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--border);
+    color: var(--text);
+    transition: all .15s;
+  }
+
+  .ref-token.active {
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+    transform: scale(1.15);
+  }
+
+  .ref-token.hit  { background: rgba(0,255,136,0.25); color: var(--green); }
+  .ref-token.miss { background: rgba(255,68,102,0.2); color: var(--red); }
+
+  /* Frame display */
+  .frames-area {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .frame-slot {
+    width: 52px; height: 52px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    transition: all .3s;
+    position: relative;
+  }
+
+  .frame-slot.occupied { border-color: var(--accent); color: var(--accent); }
+  .frame-slot.new-load { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.1); animation: pop .3s ease; }
+  .frame-slot.evicted  { border-color: var(--red); color: var(--red); animation: shake .25s ease; }
+  .frame-slot.hit-slot { border-color: var(--gold); color: var(--gold); background: rgba(255,208,96,0.08); }
+
+  @keyframes pop   { 0%{transform:scale(.7);opacity:0} 100%{transform:scale(1);opacity:1} }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+
+  .lru-label {
+    position: absolute;
+    top: -8px;
+    font-size: 0.5rem;
+    color: var(--dim);
+    letter-spacing: 1px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Log table */
+  .log-area {
+    max-height: 260px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+  }
+
+  .log-area::-webkit-scrollbar { width: 4px; }
+  .log-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    position: sticky; top: 0;
+    background: var(--panel);
+    color: var(--dim);
+    text-align: left;
+    padding: 6px 8px;
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td { padding: 5px 8px; border-bottom: 1px solid rgba(30,35,48,.5); }
+
+  tr.hit-row  { background: var(--hit-bg); }
+  tr.miss-row { background: var(--miss-bg); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .badge.hit  { background: rgba(0,255,136,.15); color: var(--green); }
+  .badge.miss { background: rgba(255,68,102,.15); color: var(--red); }
+
+  /* Bar chart */
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 80px;
+    margin-top: 8px;
+  }
+
+  .bar-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  .bar {
+    width: 100%;
+    border-radius: 4px 4px 0 0;
+    transition: height .4s cubic-bezier(.34,1.56,.64,1);
+    min-height: 4px;
+  }
+
+  .bar-xlabel {
+    font-size: 0.6rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--dim);
+  }
+
+  .bar-val {
+    font-size: 0.6rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+  }
+
+  /* Donut */
+  .donut-wrap { display: flex; align-items: center; gap: 20px; }
+
+  svg.donut { transform: rotate(-90deg); }
+
+  .donut-legend { flex: 1; }
+  .donut-legend-item {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    margin-bottom: 8px;
+  }
+  .dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+  /* Benchmark */
+  .bench-bar-wrap { margin-top: 8px; }
+  .bench-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bench-label { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; width: 90px; color: var(--dim); }
+  .bench-track { flex: 1; height: 20px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .bench-fill { height: 100%; border-radius: 4px; transition: width .6s cubic-bezier(.34,1.56,.64,1); display: flex; align-items: center; padding-left: 8px; }
+  .bench-fill span { font-size: 0.65rem; font-family: 'JetBrains Mono', monospace; color: #000; font-weight: 700; white-space: nowrap; }
+
+  /* Trending */
+  .trending-list { margin-top: 6px; }
+  .trend-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .trend-rank { font-size: 1rem; font-weight: 800; color: var(--gold); width: 22px; }
+  .trend-info { flex: 1; }
+  .trend-title { font-size: 0.78rem; color: var(--text); }
+  .trend-topic { font-size: 0.65rem; font-family: 'JetBrains Mono', monospace; color: var(--dim); }
+  .trend-views { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--accent); }
+
+  /* Step controls */
+  .step-controls { display: flex; gap: 8px; align-items: center; margin-top: 14px; }
+  .step-btn {
+    background: var(--border);
+    border: 1px solid var(--dim);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: .15s;
+  }
+  .step-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .step-btn:disabled { opacity: .3; cursor: not-allowed; }
+
+  .step-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--dim);
+    margin-left: auto;
+  }
+
+  .status-chip {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .status-chip.hit  { background: rgba(0,255,136,.12); color: var(--green); border: 1px solid rgba(0,255,136,.3); }
+  .status-chip.miss { background: rgba(255,68,102,.12); color: var(--red);   border: 1px solid rgba(255,68,102,.3); }
+
+  .algo-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .algo-tab {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--dim);
+    transition: .15s;
+  }
+  .algo-tab.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+
+  .compare-bar-group { margin-bottom: 12px; }
+  .compare-label { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--dim); margin-bottom: 4px; }
+  .compare-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .algo-name { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; width: 52px; }
+  .compare-track { flex:1; height:14px; background: var(--border); border-radius:3px; overflow:hidden; }
+  .compare-fill { height:100%; border-radius:3px; display:flex; align-items:center; padding-left:5px; transition: width .5s ease; }
+  .compare-fill span { font-size: 0.6rem; font-family: 'JetBrains Mono', monospace; color:#000; font-weight:700; }
+</style>
+</head>
+<body>
+
+<h1>⚡ FeedFlow</h1>
+<div class="subtitle">Personalised News Feed Curator · LRU Cache + Hash Index Simulation</div>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>CACHE SIZE</label>
+    <input type="range" id="cacheSize" min="3" max="10" value="5">
+    <span class="val-display" id="cacheSizeVal">5</span>
+  </div>
+  <div class="ctrl-group">
+    <label>REQUESTS</label>
+    <input type="range" id="numReq" min="20" max="80" value="60" step="10">
+    <span class="val-display" id="numReqVal">60</span>
+  </div>
+  <div class="ctrl-group">
+    <label>USERS</label>
+    <input type="range" id="numUsers" min="5" max="20" value="15" step="5">
+    <span class="val-display" id="numUsersVal">15</span>
+  </div>
+  <button class="btn" onclick="runSimulation()">▶ RUN SIMULATION</button>
+</div>
+
+<!-- Stat cards -->
+<!-- Stat cards -->
+<div class="grid-5">
+
+  <div class="panel">
+    <div class="panel-title">
+      <span></span>LRU HIT RATIO
+    </div>
+
+    <div class="stat-val"
+         id="lruHitRatio"
+         style="color:var(--accent)">
+      —
+    </div>
+
+    <div class="stat-label">
+      least recently used
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span style="background:var(--purple)"></span>
+      FIFO HIT RATIO
+    </div>
+
+    <div class="stat-val"
+         id="fifoHitRatio"
+         style="color:var(--purple)">
+      —
+    </div>
+
+    <div class="stat-label">
+      first in first out
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span style="background:var(--green)"></span>
+      OPTIMAL HIT RATIO
+    </div>
+
+    <div class="stat-val"
+         id="optHitRatio"
+         style="color:var(--green)">
+      —
+    </div>
+
+    <div class="stat-label">
+      theoretical best
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span style="background:var(--gold)"></span>
+      HASH SPEEDUP
+    </div>
+
+    <div class="stat-val"
+         id="speedupVal"
+         style="color:var(--gold)">
+      —
+    </div>
+
+    <div class="stat-label">
+      index vs linear scan
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span style="background:var(--red)"></span>
+      EVICTIONS
+    </div>
+
+    <div class="stat-val"
+         id="evictVal"
+         style="color:var(--red)">
+      —
+    </div>
+
+    <div class="stat-label">
+      cache replacements
+    </div>
+  </div>
+
+</div>
+
+<!-- Main grid -->
+<div class="grid-2">
+  <!-- Left: LRU Visualiser -->
+  <div class="panel">
+    <div class="panel-title" id="algoTitleText">
+  <span></span>
+  LRU PAGE REPLACEMENT — STEP-BY-STEP
+</div>
+
+    <div class="algo-tabs">
+      <button class="algo-tab active" id="tab-lru" onclick="setAlgo('lru')">LRU</button>
+      <button class="algo-tab" id="tab-fifo" onclick="setAlgo('fifo')">FIFO</button>
+      <button class="algo-tab" id="tab-opt" onclick="setAlgo('opt')">OPTIMAL</button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim);">REQUEST:</div>
+      <div style="font-family:'JetBrains Mono',monospace; font-size:1.2rem; font-weight:700; color:var(--accent);" id="curUser">—</div>
+      <div id="curStatus" class="status-chip miss" style="display:none;"></div>
+      <div style="font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim); margin-left:auto;">
+        Evicted: <span id="evictedUser" style="color:var(--red);">—</span>
+      </div>
+    </div>
+
+    <div id="framesArea" class="frames-area"></div>
+
+    <div style="margin-top:14px;">
+      <div class="panel-title" style="margin-bottom:6px;"><span style="background:var(--purple)"></span>REFERENCE STRING</div>
+      <div class="ref-string" id="refStringArea"></div>
+    </div>
+
+    <div class="step-controls">
+      <button class="step-btn" id="btnPrev" onclick="stepPrev()" disabled>← PREV</button>
+      <button class="step-btn" id="btnNext" onclick="stepNext()" disabled>NEXT →</button>
+      <button class="step-btn" onclick="autoPlay()" id="btnPlay">▶ AUTO</button>
+      <div class="step-info" id="stepInfo">Step 0 / 0</div>
+    </div>
+  </div>
+
+  <!-- Right: Stats + Comparison -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    <div class="panel">
+      <div class="panel-title"><span style="background:var(--gold)"></span>ALGORITHM COMPARISON</div>
+      <div class="compare-bar-group">
+        <div class="compare-label">HIT RATIO</div>
+        <div class="compare-row">
+          <span class="algo-name" style="color:var(--accent)">LRU</span>
+          <div class="compare-track"><div class="compare-fill" id="bar-lru" style="background:var(--accent); width:0%"><span id="lbl-lru"></span></div></div>
+        </div>
+        <div class="compare-row">
+          <span class="algo-name" style="color:var(--purple)">FIFO</span>
+          <div class="compare-track"><div class="compare-fill" id="bar-fifo" style="background:var(--purple); width:0%"><span id="lbl-fifo"></span></div></div>
+        </div>
+        <div class="compare-row">
+          <span class="algo-name" style="color:var(--green)">OPT</span>
+          <div class="compare-track"><div class="compare-fill" id="bar-opt" style="background:var(--green); width:0%"><span id="lbl-opt"></span></div></div>
+        </div>
+      </div>
+      <div class="compare-bar-group" style="margin-top:12px;">
+        <div class="compare-label">MISSES</div>
+        <div class="compare-row">
+          <span class="algo-name" style="color:var(--accent)">LRU</span>
+          <div class="compare-track"><div class="compare-fill" id="mbar-lru" style="background:rgba(255,68,102,.6); width:0%"><span id="mlbl-lru"></span></div></div>
+        </div>
+        <div class="compare-row">
+          <span class="algo-name" style="color:var(--purple)">FIFO</span>
+          <div class="compare-track"><div class="compare-fill" id="mbar-fifo" style="background:rgba(255,68,102,.6); width:0%"><span id="mlbl-fifo"></span></div></div>
+        </div>
+        <div class="compare-row">
+          <span class="algo-name" style="color:var(--green)">OPT</span>
+          <div class="compare-track"><div class="compare-fill" id="mbar-opt" style="background:rgba(255,68,102,.6); width:0%"><span id="mlbl-opt"></span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><span style="background:var(--gold)"></span>INPUT ENHANCEMENT BENCHMARK</div>
+      <div class="bench-bar-wrap">
+        <div class="bench-row">
+          <div class="bench-label">LINEAR SCAN</div>
+          <div class="bench-track">
+            <div class="bench-fill" id="benchLinear" style="background:var(--red); width:0%"><span id="benchLinearVal"></span></div>
+          </div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label">HASH INDEX</div>
+          <div class="bench-track">
+            <div class="bench-fill" id="benchIndex" style="background:var(--green); width:0%"><span id="benchIndexVal"></span></div>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim); margin-top:8px;">
+        Space-Time Tradeoff: <span id="tradeoffText" style="color:var(--gold);">pre-index builds O(n) memory → O(1) topic lookup per feed</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><span style="background:var(--red)"></span>TRENDING ARTICLES</div>
+      <div class="trending-list" id="trendingList">
+        <div style="color:var(--dim); font-size:.8rem; font-family:'JetBrains Mono',monospace;">Run simulation to see trending…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Full log table -->
+<div class="panel">
+  <div class="panel-title"><span></span>FULL REQUEST LOG — LRU</div>
+  <div class="log-area">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>USER</th><th>STATUS</th><th>EVICTED</th><th>FRAMES (LRU→MRU)</th>
+        </tr>
+      </thead>
+      <tbody id="logBody">
+        <tr><td colspan="5" style="color:var(--dim);padding:16px;font-family:'JetBrains Mono',monospace;">Run simulation to populate log…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+//SIMULATION ENGINE
+
+const TOPICS = ["tech","sports","finance","health","politics","science","entertainment"];
+
+class RNG {
+  constructor(seed) { this.s = seed % 2147483647; if(this.s<=0) this.s+=2147483646; }
+  next() { this.s = this.s * 16807 % 2147483647; return this.s; }
+  rand() { return (this.next()-1)/2147483646; }
+  choice(arr) { return arr[Math.floor(this.rand()*arr.length)]; }
+  randInt(a,b) { return a+Math.floor(this.rand()*(b-a+1)); }
+  shuffle(arr) { let a=[...arr]; for(let i=a.length-1;i>0;i--){let j=Math.floor(this.rand()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+}
+
+function genArticles(n=120, seed=42) {
+  const rng = new RNG(seed);
+  return Array.from({length:n}, (_,i) => ({
+    id:i, topic:rng.choice(TOPICS),
+    score: Math.round(rng.rand()*90+10)/10,
+    views: rng.randInt(0,500), title:`Article-${i}`
+  }));
+}
+
+function genUsers(n=20, seed=7) {
+  const rng = new RNG(seed);
+  return Array.from({length:n}, (_,i) => {
+    const sh = rng.shuffle(TOPICS);
+    return {id:i, preferred:sh.slice(0,3), disliked:sh.slice(5)};
+  });
+}
+
+function buildIndex(articles) {
+  const idx = {};
+  TOPICS.forEach(t => idx[t]=[]);
+  articles.forEach(a => idx[a.topic].push(a));
+  return idx;
+}
+
+function rankFeed(user, idx, trendingIds, topK=8) {
+  let cands = [];
+  user.preferred.forEach(t => cands.push(...(idx[t]||[])));
+  cands = cands.filter(a=>!user.disliked.includes(a.topic));
+  cands.sort((a,b)=>{
+    const pw = t => user.preferred.includes(t) ? (3-user.preferred.indexOf(t))*1.5 : 0;
+    const tb = id => trendingIds.has(id) ? 2 : 0;
+    return (b.score+pw(b.topic)+tb(b.id)) - (a.score+pw(a.topic)+tb(a.id));
+  });
+  return cands.slice(0,topK);
+}
+
+// LRU cache
+function simLRU(refStr, cap) {
+  const cache = new Map(); // LinkedHash behaviour via Map insertion order trick
+  let hits=0, misses=0, evictions=0;
+  const hist = [];
+  refStr.forEach(uid => {
+    let status, evicted=null;
+    if(cache.has(uid)) {
+      cache.delete(uid); cache.set(uid,true);
+      hits++; status='HIT';
+    } else {
+      misses++;
+      if(cache.size>=cap) { const lru=cache.keys().next().value; cache.delete(lru); evicted=lru; evictions++; }
+      cache.set(uid,true);
+      status='MISS';
+    }
+    hist.push({uid,status,evicted,frames:[...cache.keys()]});
+  });
+  return {hits,misses,evictions,hist,hitRatio:hits/(hits+misses)};
+}
+
+function simFIFO(refStr, cap) {
+
+  const cache = new Set();
+  const order = [];
+
+  let hits = 0;
+  let misses = 0;
+
+  const hist = [];
+
+  refStr.forEach(uid => {
+
+    let status;
+    let evicted = null;
+
+    if (cache.has(uid)) {
+
+      hits++;
+      status = 'HIT';
+
+    } else {
+
+      misses++;
+      status = 'MISS';
+
+      if (cache.size >= cap) {
+
+        evicted = order.shift();
+
+        cache.delete(evicted);
+      }
+
+      cache.add(uid);
+      order.push(uid);
+    }
+
+    hist.push({
+      uid,
+      status,
+      evicted,
+      frames: [...order]
+    });
+  });
+
+  return {
+    hits,
+    misses,
+    hist,
+    hitRatio: hits / (hits + misses)
+  };
+}
+
+function simOPT(refStr, cap) {
+
+  const cache = new Set();
+
+  let hits = 0;
+  let misses = 0;
+
+  const hist = [];
+
+  refStr.forEach((uid, step) => {
+
+    let status;
+    let evicted = null;
+
+    if (cache.has(uid)) {
+
+      hits++;
+      status = 'HIT';
+
+    } else {
+
+      misses++;
+      status = 'MISS';
+
+      if (cache.size >= cap) {
+
+        const future = refStr.slice(step + 1);
+
+        let farthest = -1;
+
+        cache.forEach(id => {
+
+          const nextUse = future.indexOf(id);
+
+          const distance =
+            nextUse === -1 ? Infinity : nextUse;
+
+          if (distance > farthest) {
+
+            farthest = distance;
+            evicted = id;
+          }
+        });
+
+        cache.delete(evicted);
+      }
+
+      cache.add(uid);
+    }
+
+    hist.push({
+      uid,
+      status,
+      evicted,
+      frames: [...cache]
+    });
+  });
+
+  return {
+    hits,
+    misses,
+    hist,
+    hitRatio: hits / (hits + misses)
+  };
+}
+
+function benchmarkSpeedup(users, articles, idx) {
+  // Simulate timing via loop counts as proxy
+  const t0=performance.now();
+  for(let i=0;i<400;i++){const u=users[i%users.length]; rankFeed(u,idx,new Set());}
+  const idxTime=performance.now()-t0;
+
+  const t1=performance.now();
+  for(let i=0;i<400;i++){
+    const u=users[i%users.length];
+    let cands=articles.filter(a=>u.preferred.includes(a.topic)&&!u.disliked.includes(a.topic));
+    cands.sort((a,b)=>b.score-a.score); cands.slice(0,8);
+  }
+  const linTime=performance.now()-t1;
+  return {idxTime,linTime,speedup:linTime/Math.max(idxTime,0.001)};
+}
+
+//STATE
+
+let simData = null;
+let currentStep = 0;
+let currentAlgo = 'lru';
+let autoTimer = null;
+
+function runSimulation() {
+  const cap   = +document.getElementById('cacheSize').value;
+  const nReq  = +document.getElementById('numReq').value;
+  const nU    = +document.getElementById('numUsers').value;
+
+  const rng = new RNG(99);
+  const articles = genArticles(120);
+  const users    = genUsers(Math.max(nU,5));
+  const idx      = buildIndex(articles);
+
+  // Reference string with skew
+ const hotCount = Math.max(5, Math.floor(users.length * 0.4));
+
+const hot = Array.from(
+  {length: hotCount},
+  (_, i) => i
+).filter(x => x < users.length);
+
+const refStr = Array.from({ length: nReq }, () => {
+
+  // 70% chance → choose active/hot users
+  if (rng.rand() < 0.7) {
+    return rng.choice(hot);
+  }
+
+  // 30% chance → choose any random user
+  return rng.randInt(0, users.length - 1);
+});
+
+  const lru  = simLRU(refStr, cap);
+  const fifo = simFIFO(refStr, cap);
+  const opt  = simOPT(refStr, cap);
+  const bench= benchmarkSpeedup(users, articles, idx);
+
+  // Trending: top-viewed articles from last 10 requests
+  const viewCount = {};
+  refStr.slice(-15).forEach(uid => {
+    const user=users[uid]; if(!user)return;
+    rankFeed(user,idx,new Set(),3).forEach(a=>{ viewCount[a.id]=(viewCount[a.id]||0)+1; });
+  });
+  const trending = Object.entries(viewCount).sort((a,b)=>b[1]-a[1]).slice(0,5)
+    .map(([id,cnt])=>({...articles[+id],cnt}));
+
+  simData={refStr,lru,fifo,opt,bench,trending,cap,users};
+  currentStep=0;
+
+  // Update stat cards
+  document.getElementById('lruHitRatio').textContent = (lru.hitRatio*100).toFixed(1)+'%';
+  document.getElementById('fifoHitRatio').textContent = (fifo.hitRatio * 100).toFixed(1) + '%';
+  document.getElementById('optHitRatio').textContent = (opt.hitRatio * 100).toFixed(1) + '%';
+
+  document.getElementById('speedupVal').textContent  = bench.speedup.toFixed(2)+'×';
+  document.getElementById('evictVal').textContent    = lru.evictions;
+
+  // Comparison bars
+  const maxH = Math.max(lru.hitRatio,fifo.hitRatio,opt.hitRatio);
+  [['lru',lru],['fifo',fifo],['opt',opt]].forEach(([n,c])=>{
+    document.getElementById(`bar-${n}`).style.width=(c.hitRatio/maxH*100)+'%';
+    document.getElementById(`lbl-${n}`).textContent=(c.hitRatio*100).toFixed(1)+'%';
+    const maxM=Math.max(lru.misses,fifo.misses,opt.misses);
+    document.getElementById(`mbar-${n}`).style.width=(c.misses/maxM*100)+'%';
+    document.getElementById(`mlbl-${n}`).textContent=c.misses;
+  });
+
+  // Benchmark bars
+  const maxT = Math.max(bench.linTime, bench.idxTime);
+  document.getElementById('benchLinear').style.width=(bench.linTime/maxT*100)+'%';
+  document.getElementById('benchLinearVal').textContent=bench.linTime.toFixed(1)+'ms';
+  document.getElementById('benchIndex').style.width=(bench.idxTime/maxT*100)+'%';
+  document.getElementById('benchIndexVal').textContent=bench.idxTime.toFixed(1)+'ms';
+
+  // Trending list
+  const tl = document.getElementById('trendingList');
+  tl.innerHTML = trending.length ? trending.map((a,i)=>`
+    <div class="trend-item">
+      <div class="trend-rank">${['1.','2.','3.','4.','5.'][i]}</div>
+      <div class="trend-info">
+        <div class="trend-title">Article-${a.id}: ${a.topic.charAt(0).toUpperCase()+a.topic.slice(1)} Update</div>
+        <div class="trend-topic">${a.topic.toUpperCase()} · score ${a.score}</div>
+      </div>
+      <div class="trend-views">${a.cnt} hits</div>
+    </div>`).join('') : '<div style="color:var(--dim);font-size:.8rem;">No trending data.</div>';
+
+  // Reference string tokens
+  const rsa = document.getElementById('refStringArea');
+  rsa.innerHTML = refStr.map((uid,i)=>`<span class="ref-token" id="tok-${i}">U${uid}</span>`).join('');
+
+  // Log
+  const lb = document.getElementById('logBody');
+  lb.innerHTML = lru.hist.map((h,i)=>`
+    <tr class="${h.status==='HIT'?'hit-row':'miss-row'}">
+      <td>${i+1}</td><td>User ${h.uid}</td>
+      <td><span class="badge ${h.status==='HIT'?'hit':'miss'}">${h.status}</span></td>
+      <td>${h.evicted!==null?'User '+h.evicted:'—'}</td>
+      <td style="font-family:'JetBrains Mono',monospace;">[${h.frames.map(f=>'U'+f).join(', ')}]</td>
+    </tr>`).join('');
+
+  // Enable controls
+  document.getElementById('btnNext').disabled=false;
+  document.getElementById('btnPrev').disabled=false;
+
+  renderStep(0);
+}
+
+function getHistory() {
+
+  if (!simData) return [];
+
+  if (currentAlgo === 'lru') {
+    return simData.lru.hist;
+  }
+
+  if (currentAlgo === 'fifo') {
+    return simData.fifo.hist;
+  }
+
+  return simData.opt.hist;
+}
+
+function renderStep(step) {
+  if(!simData) return;
+  const hist = getHistory();
+  if(step<0||step>=hist.length) return;
+  currentStep=step;
+
+  const h = hist[step];
+  const cap = simData.cap;
+
+  // Header
+  document.getElementById('curUser').textContent = 'User '+h.uid;
+  const cs = document.getElementById('curStatus');
+  cs.style.display='inline-block';
+  cs.className='status-chip '+(h.status==='HIT'?'hit':'miss');
+  cs.textContent=h.status;
+  document.getElementById('evictedUser').textContent = h.evicted!==null?'User '+h.evicted:'—';
+
+  // Frames
+  const fa = document.getElementById('framesArea');
+  fa.innerHTML='';
+  for(let i=0;i<cap;i++){
+    const div=document.createElement('div');
+    div.className='frame-slot';
+    if(i<h.frames.length){
+      const uid=h.frames[i];
+      const isNew = (h.status==='MISS' && i===h.frames.length-1);
+      const isHit = (h.status==='HIT' && uid===h.uid);
+      div.className='frame-slot '+(isHit?'hit-slot':isNew?'new-load':'occupied');
+      div.innerHTML=`<span class="lru-label">${i===0?'LRU':i===h.frames.length-1?'MRU':''}</span>U${uid}`;
+    } else {
+      div.innerHTML=`<span class="lru-label"></span><span style="color:var(--border)">—</span>`;
+    }
+    fa.appendChild(div);
+  }
+
+  // Reference string tokens
+  const toks=document.querySelectorAll('.ref-token');
+  toks.forEach((t,i)=>{
+    t.className='ref-token';
+    if(i<step) t.classList.add(hist[i].status==='HIT'?'hit':'miss');
+    if(i===step) t.classList.add('active');
+  });
+
+  document.getElementById('stepInfo').textContent=`Step ${step+1} / ${hist.length}`;
+}
+
+function stepNext() { if(simData&&currentStep<simData.lru.hist.length-1) renderStep(currentStep+1); }
+function stepPrev() { if(simData&&currentStep>0) renderStep(currentStep-1); }
+
+function setAlgo(algo) {
+
+  currentAlgo = algo;
+
+  ['lru','fifo','opt'].forEach(a => {
+
+    document.getElementById(`tab-${a}`).className =
+      'algo-tab' + (a === algo ? ' active' : '');
+  });
+
+  const title = document.getElementById('algoTitleText');
+
+  if (algo === 'lru') {
+
+    title.innerHTML =
+      '<span></span>LRU PAGE REPLACEMENT — STEP-BY-STEP';
+
+  } else if (algo === 'fifo') {
+
+    title.innerHTML =
+      '<span></span>FIFO PAGE REPLACEMENT — STEP-BY-STEP';
+
+  } else {
+
+    title.innerHTML =
+      '<span></span>OPTIMAL PAGE REPLACEMENT — STEP-BY-STEP';
+  }
+
+  renderStep(currentStep);
+}
+
+let playing=false;
+function autoPlay() {
+  if(playing){clearInterval(autoTimer);playing=false;document.getElementById('btnPlay').textContent='▶ AUTO';return;}
+  playing=true; document.getElementById('btnPlay').textContent='⏹ STOP';
+  autoTimer=setInterval(()=>{
+    if(!simData||currentStep>=simData.lru.hist.length-1){
+      clearInterval(autoTimer);playing=false;
+      document.getElementById('btnPlay').textContent='▶ AUTO';return;
+    }
+    stepNext();
+  },400);
+}
+
+// Slider listeners
+['cacheSize','numReq','numUsers'].forEach(id=>{
+  const el=document.getElementById(id);
+  const disp=document.getElementById(id+'Val');
+  el.addEventListener('input',()=>disp.textContent=el.value);
+});
+
+// Initial run
+runSimulation();
+</script>
+</body>
+</html>
